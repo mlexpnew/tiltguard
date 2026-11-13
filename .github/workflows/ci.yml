@@ -1,0 +1,34 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: ruff check . && ruff format --check src tests app.py
+      - run: pytest -q
+      - name: Benchmark gate (recall of injected episodes, alert noise on real trades)
+        run: python -m tiltguard.evaluate --gate
+      - run: cat eval_results/report.md >> "$GITHUB_STEP_SUMMARY"
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t tiltguard .
+      - name: Smoke test
+        run: |
+          docker run -d --name tg -p 8000:8000 -e TILTGUARD_API_KEYS=k tiltguard
+          for i in $(seq 1 30); do curl -sf localhost:8000/health && break; sleep 1; done
+          curl -sf -H 'X-API-Key: k' -H 'Content-Type: application/json' localhost:8000/v1/scan -d '{
+            "fills":[{"account":"A","ts":"2025-01-02T10:00:00","direction":"Close Long","notional":9000,
+                      "closed_pnl":-6000,"fee":4}],
+            "limits":{"A":{"daily_loss":5000}}}' | grep -q daily_loss_limit

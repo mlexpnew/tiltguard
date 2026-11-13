@@ -1,4 +1,11 @@
-.venv/
 __pycache__/
-.ipynb_checkpoints/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+eval_results/
+demo/
+*.xlsx
+.env
+.venv/
+venv/
 .DS_Store
